@@ -20,6 +20,10 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <time.h>
+#include <unistd.h>
+#if defined(__APPLE__)
+#include <libproc.h>
+#endif
 
 typedef struct {
   char op;
@@ -30,15 +34,20 @@ typedef struct {
 static op_t *ops;
 static size_t nops, nids;
 
+/* Two passes (count, then parse into an exactly sized array) so that
+ * loading leaves no transient peak that would hide the replay's own. */
 static void load(const char *path) {
   FILE *f = fopen(path, "r");
   if (!f) {
     perror(path);
     exit(2);
   }
-  size_t cap = 1 << 20;
-  ops = malloc(cap * sizeof(op_t));
   char line[256];
+  size_t cap = 0;
+  while (fgets(line, sizeof line, f))
+    if (line[0] != '#') cap++;
+  rewind(f);
+  ops = calloc(cap ? cap : 1, sizeof(op_t));
   while (fgets(line, sizeof line, f)) {
     if (line[0] == '#') {
       unsigned long n;
@@ -52,11 +61,7 @@ static void load(const char *path) {
     o.id = (uint32_t)id;
     o.size = sz;
     if (o.id >= nids) nids = o.id + 1;
-    if (nops == cap) {
-      cap *= 2;
-      ops = realloc(ops, cap * sizeof(op_t));
-    }
-    ops[nops++] = o;
+    if (nops < cap) ops[nops++] = o;
   }
   fclose(f);
 }
@@ -67,14 +72,26 @@ static double now(void) {
   return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
 }
 
-static uint64_t maxrss_bytes(void) {
+/* Memory in use, and its peak so far. macOS: the physical footprint (the
+ * resident set there still counts pages an allocator handed back with
+ * MADV_FREE_REUSABLE). Linux: the resident set. */
+static void mem_now_peak(uint64_t *now_b, uint64_t *peak_b) {
+#if defined(__APPLE__)
+  struct rusage_info_v4 ri;
+  if (proc_pid_rusage(getpid(), RUSAGE_INFO_V4, (rusage_info_t *)&ri) == 0) {
+    *now_b = ri.ri_phys_footprint;
+    *peak_b = ri.ri_lifetime_max_phys_footprint;
+    return;
+  }
+#endif
   struct rusage ru;
   getrusage(RUSAGE_SELF, &ru);
 #if defined(__APPLE__)
-  return (uint64_t)ru.ru_maxrss; /* bytes */
+  *peak_b = (uint64_t)ru.ru_maxrss;
 #else
-  return (uint64_t)ru.ru_maxrss * 1024; /* KiB */
+  *peak_b = (uint64_t)ru.ru_maxrss * 1024;
 #endif
+  *now_b = *peak_b;
 }
 
 static int replay(void **ptr, uint64_t *sizes, int touch, uint64_t *peak_payload) {
@@ -128,9 +145,11 @@ int main(int argc, char **argv) {
   memset(ptr, 0, nids * sizeof(void *));
   memset(sizes, 0, nids * sizeof(uint64_t));
   if (strcmp(argv[1], "util") == 0) {
-    uint64_t base = maxrss_bytes(), peak = 0;
+    uint64_t base, base_peak, end, end_peak, peak = 0;
+    mem_now_peak(&base, &base_peak);
     if (replay(ptr, sizes, 1, &peak) != 0) return 1;
-    uint64_t grown = maxrss_bytes() - base;
+    mem_now_peak(&end, &end_peak);
+    uint64_t grown = end_peak > base ? end_peak - base : 0;
     printf("{\"mode\":\"util\",\"ops\":%zu,\"peak_payload\":%llu,\"rss_growth\":%llu,\"util\":%.4f}\n", nops,
            (unsigned long long)peak, (unsigned long long)grown, grown ? (double)peak / (double)grown : 0.0);
     return 0;

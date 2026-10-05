@@ -114,7 +114,7 @@ mk_heap_t *mk_heap_thread_init(void) {
   uintptr_t tid = mk_thread_id();
   bool adopted = false;
   mk_lock(&mk_heaps_lock);
-  h = mk_abandoned_first;
+  h = MK_ADOPT ? mk_abandoned_first : NULL;
   if (h != NULL) {
     mk_abandoned_first = h->next_abandoned;
     if (mk_abandoned_first == NULL) mk_abandoned_last = NULL;

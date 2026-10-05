@@ -33,6 +33,20 @@
 #ifndef MK_OVERRIDE
 #define MK_OVERRIDE 0
 #endif
+/* Design switches, all on by default. tools/ablation.py builds variants
+ * with one of them turned off to measure what it is worth. */
+#ifndef MK_KEEP_LAST_PAGE /* keep the last empty page of a bin instead of retiring it */
+#define MK_KEEP_LAST_PAGE 1
+#endif
+#ifndef MK_ADOPT /* new threads adopt the heaps of exited threads */
+#define MK_ADOPT 1
+#endif
+#ifndef MK_MMAP_HINT /* ask for the next aligned mapping right after the last one */
+#define MK_MMAP_HINT 1
+#endif
+#ifndef MK_LOCAL_FREE /* owner frees go to a separate local_free list */
+#define MK_LOCAL_FREE 1
+#endif
 
 #define mk_likely(x) __builtin_expect(!!(x), 1)
 #define mk_unlikely(x) __builtin_expect(!!(x), 0)

@@ -73,7 +73,7 @@ void *mk_os_alloc_aligned_at(size_t size, size_t align, size_t offset) {
     errno = ENOMEM;
     return NULL;
   }
-  uintptr_t hint = atomic_load_explicit(&mk_aligned_hint, memory_order_relaxed);
+  uintptr_t hint = MK_MMAP_HINT ? atomic_load_explicit(&mk_aligned_hint, memory_order_relaxed) : 0;
   if (hint != 0) hint = mk_align_up(hint + offset, align) - offset;
   void *p = mk_mmap((void *)hint, size);
   if (p == NULL) return NULL;

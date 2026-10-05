@@ -124,14 +124,27 @@ void mk_free_local_slow(mk_heap_t *heap, mk_page_t *page) {
     /* Keep the last page of a bin: a program that allocates and frees one
      * object in a loop would otherwise map and retire a page each time. */
     mk_page_queue_t *q = &heap->queues[page->bin];
-    if (q->first == page && page->next == NULL) return;
+    if (MK_KEEP_LAST_PAGE && q->first == page && page->next == NULL) return;
     mk_page_retire(heap, page);
   }
 }
 
-void mk_free_block_owned(mk_heap_t *heap, mk_page_t *page, mk_block_t *b) {
+/* Owner-side free. With MK_LOCAL_FREE the block goes to local_free and only
+ * becomes allocatable again when `free` runs dry, which guarantees the slow
+ * path (remote frees, purging) runs regularly and keeps freshly freed
+ * blocks out of the way of a hot allocation sequence. */
+static inline void mk_push_owned(mk_page_t *page, mk_block_t *b) {
+#if MK_LOCAL_FREE
   b->next = page->local_free;
   page->local_free = b;
+#else
+  b->next = page->free;
+  page->free = b;
+#endif
+}
+
+void mk_free_block_owned(mk_heap_t *heap, mk_page_t *page, mk_block_t *b) {
+  mk_push_owned(page, b);
   if (mk_unlikely(--page->used == 0 || page->flags != 0)) mk_free_local_slow(heap, page);
 }
 
@@ -160,8 +173,7 @@ static mk_noinline void mk_free_remote(mk_segment_t *seg, mk_page_t *page, void 
       nt = (uintptr_t)b | (tf & MK_TAG_MASK);
       delayed = false;
     }
-  } while (!atomic_compare_exchange_weak_explicit(&page->xthread_free, &tf, nt, memory_order_release,
-                                                  memory_order_relaxed));
+  } while (!atomic_compare_exchange_weak_explicit(&page->xthread_free, &tf, nt, memory_order_release, memory_order_relaxed));
   if (delayed) {
     mk_block_t *head = atomic_load_explicit(&heap->delayed_free, memory_order_relaxed);
     do {
@@ -185,9 +197,7 @@ void mk_free(void *p) {
   if (!mk_debug_on_free(seg, page, p)) return;
 #endif
   if (mk_likely(atomic_load_explicit(&seg->thread_id, memory_order_relaxed) == mk_thread_id())) {
-    mk_block_t *b = (mk_block_t *)p;
-    b->next = page->local_free;
-    page->local_free = b;
+    mk_push_owned(page, (mk_block_t *)p);
     if (mk_unlikely(--page->used == 0 || page->flags != 0)) mk_free_local_slow(seg->heap, page);
   } else {
     mk_free_remote(seg, page, p);

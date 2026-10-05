@@ -73,7 +73,7 @@ def workloads(ext, threads_list, quick):
     for t in threads_list:
         w += [
             ("larson", t, [f"{mb}/larson", secs, "8", "1000", "5000", "100", "4141", str(t)], "ops", parse_larson),
-            ("mstress", t, [f"{mb}/mstress", str(t), "50", "25"], "time", None),
+            ("mstress", t, [f"{mb}/mstress", str(t), "50", "200"], "time", None),
             ("xmalloc-test", t, [f"{mb}/xmalloc-test", "-w", str(t), "-t", secs, "-s", "64"], "ops", parse_xmalloc),
             ("cache-scratch", t, [f"{mb}/cache-scratch", str(t), "1000", "1", "2000000", str(t)], "time", None),
             ("glibc-thread", t, [f"{mb}/glibc-thread", str(t)], "ops", parse_glibc_thread),
@@ -81,8 +81,30 @@ def workloads(ext, threads_list, quick):
     return w
 
 
+_libc = None
+
+
+def peak_footprint(pid):
+    """macOS: lifetime peak of the physical footprint of an exited, not yet
+    reaped child (what Activity Monitor calls memory). On macOS the
+    resident set size also counts pages an allocator gave back with
+    MADV_FREE_REUSABLE until the kernel takes them, so the footprint is the
+    fairer measure of memory use. Returns None elsewhere."""
+    global _libc
+    if not IS_MAC:
+        return None
+    import ctypes
+    if _libc is None:
+        _libc = ctypes.CDLL("/usr/lib/libSystem.dylib")
+    buf = (ctypes.c_uint64 * 64)()
+    if _libc.proc_pid_rusage(pid, 4, ctypes.byref(buf)) != 0:  # RUSAGE_INFO_V4
+        return None
+    return int(buf[2 + 28])  # after the 16-byte uuid: ri_lifetime_max_phys_footprint
+
+
 def run_measured(argv, lib, extra_env=None, cwd=None, timeout=600):
-    """Run once; reap the child with os.wait4 to get its own peak RSS."""
+    """Run once. Returns wall time, output, peak RSS (wait4) and, on macOS,
+    the peak physical footprint (read while the child is a zombie)."""
     env = dict(os.environ)
     env.pop(PRELOAD, None)
     if lib:
@@ -95,21 +117,23 @@ def run_measured(argv, lib, extra_env=None, cwd=None, timeout=600):
         p = subprocess.Popen(argv, env=env, cwd=cwd, stdout=tf, stderr=subprocess.STDOUT)
         deadline = t0 + timeout
         while True:
-            pid, status, ru = os.wait4(p.pid, os.WNOHANG)
-            if pid != 0:
+            info = os.waitid(os.P_PID, p.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            if info is not None and info.si_pid == p.pid:
                 break
             if time.perf_counter() > deadline:
                 p.kill()
                 os.wait4(p.pid, 0)
                 return {"ok": False, "error": "timeout", "load1": load}
-            time.sleep(0.002)
+            time.sleep(0.001)
         wall = time.perf_counter() - t0
+        foot = peak_footprint(p.pid)
+        _, status, ru = os.wait4(p.pid, 0)
         p.returncode = os.waitstatus_to_exitcode(status)
         tf.seek(0)
         out = tf.read().decode("utf-8", "replace")
     maxrss = ru.ru_maxrss if IS_MAC else ru.ru_maxrss * 1024
-    return {"ok": p.returncode == 0, "wall": wall, "maxrss": maxrss, "user": ru.ru_utime, "sys": ru.ru_stime,
-            "out": out, "load1": load}
+    return {"ok": p.returncode == 0, "wall": wall, "maxrss": maxrss, "footprint": foot if foot else maxrss,
+            "user": ru.ru_utime, "sys": ru.ru_stime, "out": out, "load1": load}
 
 
 def machine():
@@ -169,6 +193,7 @@ def main():
                     r = run_measured(cmd, lib, cwd=os.path.dirname(argv[0]))
                     rec = {"bench": name, "threads": t, "alloc": alloc, "rep": rep, "metric": metric,
                            "ok": r["ok"], "wall": r.get("wall"), "maxrss": r.get("maxrss"),
+                           "footprint": r.get("footprint"),
                            "load1": r.get("load1"), "tag": args.tag}
                     if r["ok"]:
                         rec["value"] = parser(r["out"]) if parser else r["wall"]
@@ -182,7 +207,7 @@ def main():
                     v = rec.get("value")
                     print(f"{name:15s} t={t:<2d} {alloc:9s} rep {rep}: "
                           f"{'FAIL ' + rec.get('error', '')[:60] if not rec['ok'] else ('%.3f s' % v if metric == 'time' else '%.3g ops/s' % v)}"
-                          f"  rss {((rec.get('maxrss') or 0) / 2**20):.0f} MiB  load {rec['load1']:.1f}",
+                          f"  mem {((rec.get('footprint') or 0) / 2**20):.0f} MiB  load {rec['load1']:.1f}",
                           flush=True)
     print("wrote", path)
 

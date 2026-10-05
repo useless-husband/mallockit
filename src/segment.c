@@ -23,7 +23,11 @@
 /* ...but at most this many dirty (not yet purged) bytes: beyond it the
  * oldest dirty segment is purged at once instead of after the delay. */
 #ifndef MK_CACHE_DIRTY_MAX
-#define MK_CACHE_DIRTY_MAX ((size_t)8 << 20)
+#define MK_CACHE_DIRTY_MAX ((size_t)64 << 20)
+#endif
+/* Larger mappings (huge objects) are cached too, up to this size each. */
+#ifndef MK_CACHE_HUGE_MAX
+#define MK_CACHE_HUGE_MAX ((size_t)256 << 20)
 #endif
 
 /* ------------------------------------------------------- segment map */
@@ -70,12 +74,13 @@ size_t mk_segment_header_size(int kind) {
 static void mk_segment_init(mk_segment_t *seg, int kind, size_t page0_offset) {
   /* keep what describes the mapping itself */
   size_t size = seg->size, dirty = seg->dirty_extent;
-  uint8_t is_zero = seg->is_zero;
+  uint8_t is_zero = seg->is_zero, needs_reuse = seg->needs_reuse;
   unsigned n = mk_kind_pages(kind);
   memset(seg, 0, sizeof(mk_segment_t) + n * sizeof(mk_page_t));
   seg->size = size;
   seg->dirty_extent = dirty;
   seg->is_zero = is_zero;
+  seg->needs_reuse = needs_reuse;
   seg->kind = (uint8_t)kind;
   seg->page_shift = (uint8_t)mk_kind_shift(kind);
   seg->page_count = (uint8_t)n;
@@ -155,7 +160,7 @@ void mk_segment_release(mk_segment_t *seg) {
   seg->heap = NULL;
   seg->in_free_list = 0;
   seg->next = seg->prev = seg->fnext = seg->fprev = NULL;
-  if (seg->size != MK_SEGMENT_SIZE) {
+  if (seg->size > MK_CACHE_HUGE_MAX) {
     mk_segment_unmap(seg);
     return;
   }
@@ -203,24 +208,40 @@ void mk_segment_cache_flush(bool all) {
   }
 }
 
-/* A 4 MiB segment from the cache (most recently freed first: still in the
- * CPU caches, no page faults) or from the OS. */
-static mk_segment_t *mk_segment_alloc_std(void) {
-  mk_segment_t *seg = NULL;
-  if (atomic_load_explicit(&mk_cache_count, memory_order_relaxed) > 0) { /* peek; re-checked under the lock */
-    mk_lock(&mk_cache_lock);
-    seg = mk_cache_first;
-    if (seg) mk_cache_unlink(seg);
-    mk_unlock(&mk_cache_lock);
-  }
-  if (seg) {
-    if (seg->needs_reuse) {
-      mk_os_reuse((uint8_t *)seg + mk_os_page_size, seg->size - mk_os_page_size);
-      seg->needs_reuse = 0;
+/* Take a cached mapping of at least `size` bytes: exactly one segment for
+ * size == MK_SEGMENT_SIZE, else the smallest that fits (best fit). The most
+ * recently freed come first: still in the CPU caches, no page faults. */
+static mk_segment_t *mk_cache_take(size_t size) {
+  if (atomic_load_explicit(&mk_cache_count, memory_order_relaxed) == 0) return NULL; /* peek */
+  mk_segment_t *best = NULL;
+  mk_lock(&mk_cache_lock);
+  for (mk_segment_t *s = mk_cache_first; s != NULL; s = s->next) {
+    if (size == MK_SEGMENT_SIZE ? s->size == size : (s->size >= size && (!best || s->size < best->size))) {
+      best = s;
+      if (size == MK_SEGMENT_SIZE || s->size == size) break;
     }
-    seg->is_zero = 0;
-    return seg;
   }
+  if (best) mk_cache_unlink(best);
+  mk_unlock(&mk_cache_lock);
+  if (best == NULL) return NULL;
+  if (best->dirty_extent > size + 4 * mk_os_page_size) {
+    /* Keep the whole mapping (it can serve a bigger request next time and
+     * lets realloc grow in place) but hand back its dirty tail. */
+    mk_os_purge((uint8_t *)best + size, best->dirty_extent - size);
+    best->needs_reuse = 1;
+    best->dirty_extent = size;
+  }
+  /* needs_reuse stays set: the caller declares reuse (macOS) only for the
+   * range it is about to touch. MADV_FREE_REUSE charges the whole range to
+   * the process footprint again, touched or not. */
+  best->is_zero = 0;
+  return best;
+}
+
+/* A 4 MiB segment from the cache or from the OS. */
+static mk_segment_t *mk_segment_alloc_std(void) {
+  mk_segment_t *seg = mk_cache_take(MK_SEGMENT_SIZE);
+  if (seg) return seg;
   seg = mk_os_alloc_aligned(MK_SEGMENT_SIZE, MK_SEGMENT_SIZE);
   if (seg == NULL) return NULL;
   seg->size = MK_SEGMENT_SIZE;
@@ -259,6 +280,13 @@ mk_page_t *mk_segment_page_alloc(mk_heap_t *heap, int kind) {
     seg = mk_segment_alloc_std();
     if (seg == NULL) return NULL;
     mk_segment_init(seg, kind, mk_segment_header_size(kind));
+    if (seg->needs_reuse) {
+      /* purged in the cache: each page is reused when it is handed out */
+      seg->purged_mask = seg->free_mask;
+      if (seg->page0_offset > mk_os_page_size)
+        mk_os_reuse((uint8_t *)seg + mk_os_page_size, seg->page0_offset - mk_os_page_size);
+      seg->needs_reuse = 0;
+    }
     if (seg->dirty_extent < seg->page0_offset) seg->dirty_extent = seg->page0_offset;
     seg->heap = heap;
     atomic_store_explicit(&seg->thread_id, heap->thread_id, memory_order_relaxed);
@@ -359,6 +387,7 @@ void mk_heap_purge(mk_heap_t *heap, bool force) {
 /* ------------------------------------------------------ large objects */
 
 static void *mk_large_setup(mk_segment_t *seg, size_t off, size_t need) {
+  if (seg->needs_reuse) mk_os_reuse((uint8_t *)seg + mk_os_page_size, need - mk_os_page_size); /* tail stays purged */
   mk_segment_init(seg, MK_KIND_LARGE, off);
   seg->used_pages = 1;
   seg->free_mask = 0;
@@ -409,7 +438,7 @@ void *mk_large_alloc(size_t size, size_t align) {
       seg->needs_reuse = 1;
       seg->dirty_extent = need;
     }
-  } else {
+  } else if ((seg = mk_cache_take(need)) == NULL) {
     seg = mk_os_alloc_aligned(need, MK_SEGMENT_SIZE);
     if (seg == NULL) return NULL;
     seg->size = need;
