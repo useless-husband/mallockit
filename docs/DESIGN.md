@@ -154,8 +154,8 @@ fields.
 **Thread start**: a new thread first tries to *adopt* an abandoned heap, whole: it sets the
 heap's and its segments' owner to itself and continues where the dead thread stopped. Blocks the
 dead thread left behind become local again. Without adoption the larson benchmark (threads that
-hand their objects to successor threads) grew to 761 MiB instead of 35 MiB and mstress to 3 GiB
-instead of ~65 MiB (ablation `no-adopt`).
+hand their objects to successor threads) peaked at 775 MiB instead of 35 MiB, and mstress at
+3.2 GiB instead of 65 MiB while running 29 % slower (ablation `no-adopt` in report.md).
 
 **Reclaim**: memory in abandoned heaps that nobody adopts would be stuck. Before mapping a new
 segment, a thread takes one abandoned heap off the list (try-lock, so never blocking), collects
@@ -276,9 +276,10 @@ error.
 * Memory freed by a thread that then stays idle is purged only on that thread's next slow path.
 * A full page is revisited by its owner only through the delayed-free list; a page in the middle
   of a bin queue that collects many remote frees is merged when the owner walks to it.
-* Objects of 64 KiB – 4 MiB take a whole (cached) segment each: address space is not an issue on
-  64-bit systems, but `malloc-large`-style workloads spend time in `madvise` when the cache's
-  dirty-byte bound forces purging (report.md, §5).
+* Objects of 64 KiB – 4 MiB take a whole (cached) segment each. Address space is not an issue
+  on 64-bit systems, but when such an object lands in a recycled, fully dirty segment its unused
+  tail is purged at once, and `malloc-large`-style workloads spend time in `madvise` when the
+  cache's dirty-byte bound forces purging (report.md, §7).
 * Double frees of large objects are detected in guard mode only while their segment is cached.
 * Thread exit relies on pthread key destructors. If another library's destructor allocates after
   the last destructor round (POSIX allows 4), that thread's new heap is never abandoned and its

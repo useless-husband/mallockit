@@ -81,7 +81,18 @@ jemalloc 在 macOS 上以 malloc zone 方式運作，每次呼叫都要多經過
 
 ## 正確性驗證
 
-<!-- VERIFICATION -->
+這裡的每個數字都能用本專案裡的指令重現；`python3 tools/verify.py` 會跑完所有正確性檢查，結果寫在
+[results/verification.json](results/verification.json)。
+
+| 檢查 | 結果（macOS 27、Apple M5） |
+|---|---|
+| `./build/test_unit`：各層單元測試、隨機 trace（固定亂數種子，失敗時印出）、多執行緒跨執行緒 free 壓力測試（含記憶體洩漏檢查） | 41 個通過 |
+| `./build/test_guard`：每一種除錯模式偵測各做一次故意的錯誤 | 12 個通過 |
+| `make test-override`：注入函式庫後跑 C 和 C++ 程式（一般版和除錯版） | 全部正常 |
+| `make tsan`（ThreadSanitizer，完整規模）／`make ubsan` | 41 個通過、沒有回報／41 + 12 個通過 |
+| `python3 tools/mutants.py`：故意放 12 個一行的 bug（size class 算錯、跨執行緒 free 少了 CAS、頁點陣圖和 segment 對照表差一格……） | **12 個全部抓到** |
+| `python3 tools/realprogs.py`：DuckDB 查詢、sqlite3、CPython 自己的測試（49 個模組，`PYTHONMALLOC=malloc`）、Lua 5.5 官方測試、C 編譯器編譯 SQLite | 輸出全部和系統配置器一模一樣，除錯版也是 |
+| Linux CI（GCC 和 Clang）：編譯、測試、`LD_PRELOAD` 跑 python3/perl/sort/git、ASan/UBSan/TSan | 見 `.github/workflows/ci.yml` |
 
 ## 使用方式
 

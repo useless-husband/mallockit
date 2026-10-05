@@ -89,7 +89,35 @@ throughput relative to the system allocator, score = geometric mean of U^0.5 · 
 
 ## Verification
 
-<!-- VERIFICATION -->
+Every number here comes from a command in this repository; `python3 tools/verify.py` runs the
+correctness checks and writes [results/verification.json](results/verification.json).
+
+| check | result (macOS 27, Apple M5) |
+|---|---|
+| `./build/test_unit`: per-layer unit tests, randomised trace driver (fixed seeds, printed on failure), multi-threaded stress with cross-thread frees and leak checks | 41 passed |
+| `./build/test_guard`: one deliberate memory error per guard-mode detector | 12 passed |
+| `make test-override`: C and C++ programs with the library injected (release and guard builds) | all ok |
+| `make tsan` (ThreadSanitizer, full size) / `make ubsan` | 41 passed, no reports / 41 + 12 passed |
+| `python3 tools/mutants.py`: 12 one-line bugs planted (wrong size-class rounding, plain store instead of CAS on remote free, off-by-one in the page bitmap and in the segment map, …) | **12 / 12 caught** |
+| `python3 tools/realprogs.py`: DuckDB queries, sqlite3, CPython's own tests (49 modules, `PYTHONMALLOC=malloc`), the Lua 5.5 test suite, a C compiler building SQLite | identical output to the system allocator for all of them, also under the guard build |
+| CI on Linux (GCC and Clang): build, tests, `LD_PRELOAD` with python3/perl/sort/git, ASan/UBSan/TSan | see `.github/workflows/ci.yml` |
+
+```
+$ make test
+...
+ok   trace_random_seeds                         2885.4 ms
+ok   trace_with_immediate_purge                  257.5 ms
+41 passed, 0 failed
+...
+$ MALLOCKIT_STATS=1 DYLD_INSERT_LIBRARIES=$PWD/build/libmallockit.dylib \
+    /opt/homebrew/bin/python3.12 -c "import json; d={str(i): [i]*8 for i in range(300000)}; print(len(json.dumps(d)))"
+21800010
+mallockit stats
+  mapped KiB          63984
+  segments in use     3
+  large objects       3
+  ...
+```
 
 ## Using it
 
