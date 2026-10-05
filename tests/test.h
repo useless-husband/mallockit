@@ -11,6 +11,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define MK_UNDER_TSAN 1
+#endif
+#endif
+#if !defined(MK_UNDER_TSAN) && defined(__SANITIZE_THREAD__)
+#define MK_UNDER_TSAN 1
+#endif
+#ifndef MK_UNDER_TSAN
+#define MK_UNDER_TSAN 0
+#endif
+
 typedef void (*mk_test_fn)(void);
 void mk_test_register(const char *name, mk_test_fn fn);
 void mk_test_fail(const char *file, int line, const char *expr);

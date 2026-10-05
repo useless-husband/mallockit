@@ -146,7 +146,7 @@ TEST(api_good_size_matches_usable) {
 }
 
 TEST(api_owns_rejects_foreign_pointers) {
-  int on_stack;
+  int on_stack = 0;
   static int global;
   void *sys = malloc(32); /* the C library's malloc, not ours */
   CHECK(!mk_owns(NULL));

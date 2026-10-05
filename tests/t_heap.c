@@ -116,17 +116,20 @@ TEST(heap_fork_child_keeps_working) {
       if (!x) bad = 1;
       mk_free(x);
     }
+#if !MK_UNDER_TSAN /* TSan cannot start threads after a multi-threaded fork */
     pthread_t c;
     if (pthread_create(&c, NULL, heap_of_thread, NULL) != 0) bad = 1;
     else pthread_join(c, NULL);
+#endif
     _exit(bad);
   }
   int st = 0;
   waitpid(pid, &st, 0);
   atomic_store(&fork_go, 1);
   pthread_join(t, NULL);
-  if (!(WIFEXITED(st) && WEXITSTATUS(st) == 0)) printf("    child status %d signal %d\n", WIFEXITED(st) ? WEXITSTATUS(st) : -1, WIFSIGNALED(st) ? WTERMSIG(st) : 0);
-  CHECK(WIFEXITED(st) && WEXITSTATUS(st) == 0);
   for (int i = 0; i < 100; i++) mk_free(theirs[i]);
   mk_free(mine);
+  if (!(WIFEXITED(st) && WEXITSTATUS(st) == 0))
+    printf("    child status %d signal %d\n", WIFEXITED(st) ? WEXITSTATUS(st) : -1, WIFSIGNALED(st) ? WTERMSIG(st) : 0);
+  CHECK(WIFEXITED(st) && WEXITSTATUS(st) == 0);
 }
