@@ -43,7 +43,12 @@ void mk_init(void) {
   if (atomic_compare_exchange_strong(&mk_init_state, &expected, 1)) {
     atomic_store(&mk_init_owner, me);
     mk_os_init();
-    if (pthread_key_create(&mk_heap_key, mk_thread_exit) == 0) {
+    if (pthread_key_create(&mk_heap_key, mk_thread_exit) != 0) {
+      /* Without a key there is no per-thread heap on macOS (every malloc
+       * would build a new one) and no thread-exit hook anywhere: refuse. */
+      mk_write_err("mallockit: pthread_key_create failed\n");
+      abort();
+    } else {
       __atomic_store_n(&mk_key_ready, true, __ATOMIC_RELEASE);
 #if defined(__APPLE__) && defined(__aarch64__)
       /* The TSD array is what pthread_getspecific reads; check that our

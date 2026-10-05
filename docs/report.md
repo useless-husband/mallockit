@@ -367,6 +367,11 @@ push on a thread-local list; T is capped at 4× but no allocator reached the cap
   fields and the remote-free stack (moving it to its own cache line); neither changed the result
   beyond noise (§3.10). mimalloc uses the same data structure, so the difference is in a detail
   not yet found.
+* **One producer, one consumer, one object at a time** (the launcher's in-process micro-benchmark
+  `build/ubench`, "alloc here, free there"): about 52 ns per object against the system
+  allocator's 39 – 54 ns. Every object costs mallockit a CAS on the remote list plus the owner's
+  later walk of it; with xmalloc-test's batches of 4096 objects that cost is amortised and
+  mallockit is 2.5× faster than the system allocator at 1 thread.
 * **mstress at 6 – 10 threads: up to 1.4× slower than mimalloc.** mstress recreates all threads
   every iteration and passes objects between them; at 4 threads and below mallockit is within
   5 % of mimalloc. A profile at 10 threads puts `madvise` at the top of the allocator's samples:
