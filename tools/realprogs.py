@@ -37,7 +37,7 @@ import run as bench  # noqa: E402
 PY312 = "/opt/homebrew/opt/python@3.12/bin/python3.12"
 SQLITE = "/opt/homebrew/opt/sqlite/bin/sqlite3"
 LUA = "/opt/homebrew/opt/lua/bin/lua"
-DUCKDB_VERSION = "1.4.1"
+DUCKDB_VERSION = "1.5.6"
 LUA_TESTS = "https://www.lua.org/tests/lua-5.5.0-tests.tar.gz"
 CPYTHON_TESTS = ("test_dict test_list test_set test_tuple test_deque test_json test_re test_unicode test_str "
                  "test_bytes test_collections test_itertools test_functools test_sort test_heapq test_bisect "
@@ -97,7 +97,9 @@ def programs(work, ext):
     progs.append(("sqlite", ["/bin/sh", "-c", ""], None, {}, None))  # replaced below (stdin redirect)
     od = ensure_ouro(work)
     if od:
-        progs.append(("ouro", [os.path.join(od, "ouro"), "-S", "-O1", "sqlite3.c", "-o", "sqlite3.s"], od, {},
+        flags = ["-w", "-DSQLITE_THREADSAFE=0", "-DSQLITE_OMIT_LOAD_EXTENSION", "-DSQLITE_WITHOUT_ZONEMALLOC",
+                 "-DSQLITE_ENABLE_LOCKING_STYLE=0", "-DSQLITE_ENABLE_FTS5"]  # as ouro's scripts/sqlite.sh
+        progs.append(("ouro", [os.path.join(od, "ouro"), "-S", "-O1"] + flags + ["sqlite3.c", "-o", "sqlite3.s"], od, {},
                       lambda out, od=od: hashlib.sha256(open(os.path.join(od, "sqlite3.s"), "rb").read())
                       .hexdigest()[:16]))
     ld = ensure_lua_tests(work)
@@ -110,7 +112,7 @@ def programs(work, ext):
 
 def sqlite_argv(work):
     # sqlite3 reads the script from stdin; avoid /bin/sh (SIP strips DYLD_*)
-    return [SQLITE, ":memory:", ".read " + os.path.join(ROOT, "bench", "sqlite_workload.sql")]
+    return [SQLITE, ":memory:", ".read '" + os.path.join(ROOT, "bench", "sqlite_workload.sql") + "'"]
 
 
 def summarize_cpython(out):

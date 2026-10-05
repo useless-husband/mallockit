@@ -22,8 +22,9 @@ the alternatives that were considered and rejected. Numbers quoted here come fro
 ```
 
 `src/mallockit.c` compiles all layers as one translation unit so the compiler can inline across
-them (measured: the interposed `free` on macOS spent ~10% of its samples in calls to the
-segment-map test before this).
+them. Before this, a sampling profile of mstress showed about a sixth of the allocator's own
+samples in the out-of-line ownership check (`mk_owns` + `mk_segmap_test`) that the interposed
+`free` runs on every call.
 
 ## 2. Size classes
 
@@ -279,4 +280,7 @@ error.
   64-bit systems, but `malloc-large`-style workloads spend time in `madvise` when the cache's
   dirty-byte bound forces purging (report.md, §5).
 * Double frees of large objects are detected in guard mode only while their segment is cached.
+* Thread exit relies on pthread key destructors. If another library's destructor allocates after
+  the last destructor round (POSIX allows 4), that thread's new heap is never abandoned and its
+  segments keep a dead thread's id.
 * 32-bit platforms and Windows are not supported.

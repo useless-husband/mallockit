@@ -20,7 +20,6 @@ import os
 import platform
 import random
 import re
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -53,8 +52,10 @@ def parse_xmalloc(out):
 
 
 def parse_glibc_thread(out):
+    # the program runs for a fixed 2 s (BENCHMARK_DURATION) and prints the
+    # total number of malloc+free iterations of all threads
     m = re.search(r"([0-9.]+)\s+iterations", out)
-    return float(m.group(1)) if m else None
+    return float(m.group(1)) / 2.0 if m else None
 
 
 def workloads(ext, threads_list, quick):
@@ -102,7 +103,14 @@ def peak_footprint(pid):
     return int(buf[2 + 28])  # after the 16-byte uuid: ri_lifetime_max_phys_footprint
 
 
-def run_measured(argv, lib, extra_env=None, cwd=None, timeout=600):
+def _background():
+    # macOS: darwin background priority keeps the process on the efficiency
+    # cores. Set in the child before exec, so DYLD_* survive (going through
+    # /usr/sbin/taskpolicy would strip them: it is SIP-protected).
+    os.setpriority(os.PRIO_DARWIN_PROCESS, 0, os.PRIO_DARWIN_BG)
+
+
+def run_measured(argv, lib, extra_env=None, cwd=None, timeout=600, ecores=False):
     """Run once. Returns wall time, output, peak RSS (wait4) and, on macOS,
     the peak physical footprint (read while the child is a zombie)."""
     env = dict(os.environ)
@@ -114,7 +122,8 @@ def run_measured(argv, lib, extra_env=None, cwd=None, timeout=600):
     load = os.getloadavg()[0]
     with tempfile.TemporaryFile() as tf:
         t0 = time.perf_counter()
-        p = subprocess.Popen(argv, env=env, cwd=cwd, stdout=tf, stderr=subprocess.STDOUT)
+        p = subprocess.Popen(argv, env=env, cwd=cwd, stdout=tf, stderr=subprocess.STDOUT,
+                             preexec_fn=_background if (ecores and IS_MAC) else None)
         deadline = t0 + timeout
         while True:
             info = os.waitid(os.P_PID, p.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
@@ -162,7 +171,7 @@ def main():
     ap.add_argument("--allocs", default="system,mallockit,mimalloc,jemalloc")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--append", action="store_true")
-    ap.add_argument("--taskpolicy", default="", help="macOS: e.g. '-b' to run on efficiency cores only")
+    ap.add_argument("--ecores", action="store_true", help="macOS: background priority = efficiency cores only")
     ap.add_argument("--tag", default="")
     args = ap.parse_args()
 
@@ -187,10 +196,7 @@ def main():
                 order = list(allocs.items())
                 rng.shuffle(order)
                 for alloc, lib in order:
-                    cmd = argv
-                    if args.taskpolicy and IS_MAC:
-                        cmd = ["taskpolicy"] + shlex.split(args.taskpolicy) + argv
-                    r = run_measured(cmd, lib, cwd=os.path.dirname(argv[0]))
+                    r = run_measured(argv, lib, cwd=os.path.dirname(argv[0]), ecores=args.ecores)
                     rec = {"bench": name, "threads": t, "alloc": alloc, "rep": rep, "metric": metric,
                            "ok": r["ok"], "wall": r.get("wall"), "maxrss": r.get("maxrss"),
                            "footprint": r.get("footprint"),
