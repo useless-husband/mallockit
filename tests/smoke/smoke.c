@@ -2,7 +2,9 @@
  * shared library preloaded (LD_PRELOAD / DYLD_INSERT_LIBRARIES); with
  * MALLOCKIT_EXPECT=1 it also checks that memory really comes from
  * mallockit, including memory the C library allocates internally. */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdbool.h>

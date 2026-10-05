@@ -13,7 +13,9 @@
  *       replays once, writing every payload byte (so it is resident), and
  *       prints the peak live payload and the growth of the peak resident
  *       set size during the replay. */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

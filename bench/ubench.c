@@ -2,7 +2,9 @@
  * malloc this program was linked with, through the same function
  * pointers. Used by the launcher for a quick, self-contained comparison;
  * the real comparison against other allocators is bench/run.py. */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include "../include/mallockit.h"
 
 #include <pthread.h>
