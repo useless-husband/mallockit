@@ -1,0 +1,6 @@
+build/
+results/quick/
+__pycache__/
+*.o
+*.dSYM/
+.DS_Store
