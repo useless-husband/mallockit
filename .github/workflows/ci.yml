@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: |
+          ${{ matrix.cc }} --version | head -1
+          echo "page size: $(getconf PAGESIZE)"
+      - name: lint (warnings are errors; clang only)
+        if: matrix.cc == 'clang'
+        run: make lint CC=clang CXX=clang++
+      - name: build
+        run: make -j4 build CC=${{ matrix.cc }}
+      - name: unit, randomised trace and multi-threaded stress tests
+        run: ./build/test_unit
+      - name: guard mode tests
+        run: ./build/test_guard
+      - name: LD_PRELOAD smoke tests (C and C++ programs)
+        run: make test-override CC=${{ matrix.cc }}
+      - name: LD_PRELOAD real programs (python3, perl, sort, git)
+        run: |
+          set -eux
+          L=$PWD/build/libmallockit.so
+          MALLOCKIT_STATS=1 LD_PRELOAD=$L python3 -c "
+          import json, sqlite3, collections
+          d = {str(i): list(range(i % 50)) for i in range(200000)}
+          assert json.loads(json.dumps(d)) == d
+          c = sqlite3.connect(':memory:'); c.execute('create table t(a, b)')
+          c.executemany('insert into t values (?, ?)', ((i, str(i) * 3) for i in range(200000)))
+          print(c.execute('select count(*), sum(length(b)) from t').fetchone())
+          " 2>&1 | tee py.log
+          grep -q "heaps created" py.log
+          LD_PRELOAD=$L perl -e 'my %h; $h{$_} = "x" x ($_ % 300) for 1..300000; print scalar(keys %h), "\n"'
+          seq 1 300000 | shuf --random-source=<(yes) | LD_PRELOAD=$L sort -n | tail -1
+          LD_PRELOAD=$L git log --oneline -1
+          LD_PRELOAD=$PWD/build/libmallockit-debug.so python3 -c "print(sum(len(str(i)) for i in range(10**6)))"
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ThreadSanitizer needs the classic mmap randomisation on recent kernels
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: AddressSanitizer (allocator code and tests)
+        run: ASAN_OPTIONS=detect_leaks=0 make asan SAN_CC=clang
+      - name: UndefinedBehaviorSanitizer
+        run: make ubsan SAN_CC=clang
+      - name: ThreadSanitizer (stress tests at 1/4 size)
+        run: make tsan SAN_CC=clang
+
+  macos:
+    # Apple Silicon runner (a virtual machine; 16 KiB pages like the real hardware).
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: |
+          sw_vers
+          clang --version | head -1
+          sysctl -n hw.pagesize
+      - name: lint (warnings are errors)
+        run: make lint
+      - name: build
+        run: make -j4 build
+      - name: unit, trace and stress tests
+        run: ./build/test_unit
+      - name: guard mode tests
+        run: ./build/test_guard
+      - name: malloc zone + DYLD_INSERT_LIBRARIES smoke tests
+        run: make test-override
+      - name: micro-benchmark (informational; a shared VM)
+        run: ./build/ubench --quick

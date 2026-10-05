@@ -53,7 +53,7 @@ LIBS := build/libmallockit.a build/libmallockit.$(SHLIB) build/libmallockit-debu
 BINS := build/test_unit build/test_guard build/smoke build/smoke_cxx build/trace_replay build/ubench
 
 .PHONY: all build test test-unit test-guard test-override lint tsan ubsan asan sanitizers bench bench-quick \
-        traces page mutants clean
+        score page mutants ablation realprogs clean
 all: build
 build: $(LIBS) $(BINS)
 
@@ -139,8 +139,9 @@ sanitizers: tsan ubsan
 lint:
 	$(MAKE) clean
 	$(MAKE) -j$(JOBS) build WERROR=-Werror
-	$(PY) -m py_compile bench/*.py analysis/*.py
-	sh -n tools/mutants.sh bench/fetch.sh 跑跑看.command
+	$(PY) -m py_compile bench/*.py analysis/*.py tools/*.py
+	sh -n bench/fetch.sh
+	bash -n 跑跑看.command
 
 # ------------------------------------------------------------ benchmarks
 # Competitors and the mimalloc-bench workloads are fetched into BENCH_DIR
@@ -153,14 +154,20 @@ bench: build
 bench-quick: build
 	./build/ubench --quick
 
-traces: build/trace_replay
-	$(PY) bench/score.py --out results/score
+score: build
+	$(PY) bench/score.py --ext $(BENCH_DIR) --out results/score
 
 page:
 	$(PY) analysis/page.py --results results --out docs/results.html
 
 mutants:
-	sh tools/mutants.sh
+	$(PY) tools/mutants.py
+
+ablation: build
+	$(PY) tools/ablation.py --ext $(BENCH_DIR)
+
+realprogs: build
+	$(PY) tools/realprogs.py --ext $(BENCH_DIR)
 
 clean:
 	rm -rf build/obj build/san build/*.a build/*.so build/*.dylib build/test_* build/smoke* build/trace_replay build/ubench

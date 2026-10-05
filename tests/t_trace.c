@@ -128,7 +128,9 @@ static void run_trace(uint64_t seed, long ops, size_t nslots) {
 
 TEST(trace_random_seeds) {
   long ops = 120000 / mk_test_scale();
-  for (uint64_t seed = 1; seed <= 6 && !mk_test_current_failed; seed++) run_trace(seed, ops, 1500);
+  const char *e = getenv("MK_TRACE_SEEDS"); /* more seeds on demand */
+  uint64_t nseeds = e ? (uint64_t)atoi(e) : 6;
+  for (uint64_t seed = 1; seed <= nseeds && !mk_test_current_failed; seed++) run_trace(seed, ops, 1500);
 }
 
 TEST(trace_many_live_small_blocks) {
