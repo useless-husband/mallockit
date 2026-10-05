@@ -24,13 +24,13 @@
    "name": "ThreadSanitizer, full size",
    "command": "MK_TEST_SCALE=1 make -s tsan",
    "passed": true,
-   "result": "41 passed, 0 failed (28 s)"
+   "result": "41 passed, 0 failed (30 s)"
   },
   {
    "name": "UndefinedBehaviorSanitizer (unit + guard)",
    "command": "make -s ubsan",
    "passed": true,
-   "result": "41 passed, 0 failed + 12 passed, 0 failed (4 s)"
+   "result": "41 passed, 0 failed + 12 passed, 0 failed (7 s)"
   },
   {
    "name": "trace driver, 20 more seeds",
