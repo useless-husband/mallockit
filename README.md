@@ -16,7 +16,40 @@ Systems* (scored on space utilisation and throughput) and grew into something th
 SQLite, CPython's test suite and the Lua test suite. The design follows mimalloc closely; this is
 a learning reimplementation, not a new allocator design (see [Related work](#related-work)).
 
-<!-- RESULTS -->
+## Results
+
+Apple M5 (4 performance + 6 efficiency cores), macOS 27, measured on a **shared machine**;
+medians of 3 – 5 interleaved runs; every allocator runs the same unmodified binary
+(`DYLD_INSERT_LIBRARIES`). Full tables, charts and ranges: [docs/results.html](docs/results.html).
+
+| workload (mimalloc-bench) | threads | mallockit | macOS system | mimalloc 2.2.4 | jemalloc 5.3.0 |
+|---|---:|---:|---:|---:|---:|
+| glibc-simple (time) | 1 | **0.92 s** | 1.36 s | 0.94 s | 2.25 s |
+| cfrac (time) | 1 | 1.71 s | 2.01 s | **1.70 s** | 2.68 s |
+| espresso (time) | 1 | **2.15 s** | 2.38 s | 2.18 s | 2.60 s |
+| larson (ops/s) | 4 | **221 M** | 15 M | 217 M | 160 M |
+| larson (ops/s) | 10 | **380 M** | 36 M | **380 M** | 255 M |
+| glibc-thread (ops/s) | 10 | **1147 M** | 379 M | 1015 M | 293 M |
+| xmalloc-test (frees/s) | 4 | 356 M | 264 M | **590 M** | 205 M |
+| mstress (time) | 10 | 2.06 s | 1.89 s | **1.43 s** | 2.51 s |
+| malloc-large (time) | 1 | 0.56 s | **0.26 s** | 0.26 s | 1.49 s |
+| malloc-large (peak MiB) | 1 | 444 | 672 | 622 | **414** |
+
+Geometric mean of the speed ratios over all 34 (workload, thread count) cases: mallockit runs at
+**2.08× the system allocator**, **1.76× jemalloc** and **0.93× mimalloc**. It loses clearly on
+`malloc-large` (a deliberate memory/speed trade-off), on `xmalloc-test` against mimalloc, and on
+`mstress` above 4 threads; the [report](docs/report.md) analyses each loss. jemalloc on macOS
+runs as a malloc zone, so it pays libmalloc's dispatch on every call.
+
+**6.172-style score** (seven generated traces; utilisation = peak payload / peak footprint growth,
+throughput relative to the system allocator, score = geometric mean of U^0.5 · T^0.5):
+
+| | mallockit | system | mimalloc | jemalloc |
+|---|---:|---:|---:|---:|
+| score | **1.34** | 0.75 | 1.22 | 0.76 |
+| utilisation (geo-mean) | 0.72 | 0.56 | **0.76** | 0.72 |
+| throughput vs system | **2.49×** | 1.00× | 1.95× | 0.81× |
+
 
 ## How it works
 

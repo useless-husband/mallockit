@@ -36,7 +36,7 @@ def bench_tables(results):
     print("|---|---:|" + "---:|" * len(ALLOCS) + "---:|")
     cases = sorted({(b, t) for (b, t, a) in d})
     for b, t in cases:
-        if t not in (1, 4, 10):
+        if t not in (1, 4, 10) or b == "cache-scratch1":  # cache-scratch1 = cache-scratch at 1 thread
             continue
         meds = {a: page.med(d.get((b, t, a), [])) for a in ALLOCS}
         vals = [v for v in meds.values() if v is not None]
@@ -52,6 +52,8 @@ def bench_tables(results):
     for other in ALLOCS[1:]:
         ratios = []
         for b, t in cases:
+            if b == "cache-scratch1":
+                continue
             x, y = page.med(d.get((b, t, "mallockit"), [])), page.med(d.get((b, t, other), []))
             if x and y:
                 ratios.append(y / x if metric[b] == "time" else x / y)

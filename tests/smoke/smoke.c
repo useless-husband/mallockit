@@ -71,7 +71,8 @@ int main(void) {
     malloc_zone_t *first = nz > 0 ? (malloc_zone_t *)zones[0] : NULL;
     EXPECT(first && first->zone_name && strcmp(first->zone_name, "mallockit") == 0);
     EXPECT(first && first->size(first, s) >= 100000);
-    EXPECT(malloc_zone_from_ptr(s) == malloc_default_zone());
+    malloc_zone_t *zs = malloc_zone_from_ptr(s); /* ours, or the default-zone wrapper */
+    EXPECT(zs == first || zs == malloc_default_zone());
     void *zp = malloc_zone_malloc(malloc_default_zone(), 40); /* the zone path */
     EXPECT(owns && owns(zp));
     EXPECT(malloc_size(zp) >= 40);
