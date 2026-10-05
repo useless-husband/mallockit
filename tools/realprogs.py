@@ -86,6 +86,9 @@ def ensure_ouro(work):
     os.makedirs(d, exist_ok=True)
     shutil.copy2(binp, os.path.join(d, "ouro"))
     shutil.copy2(amal[0], os.path.join(d, "sqlite3.c"))
+    inc = os.path.join(d, "include")
+    if not os.path.isdir(inc):
+        shutil.copytree(os.path.join(src, "include"), inc)
     return d
 
 
@@ -99,12 +102,19 @@ def programs(work, ext):
     if od:
         flags = ["-w", "-DSQLITE_THREADSAFE=0", "-DSQLITE_OMIT_LOAD_EXTENSION", "-DSQLITE_WITHOUT_ZONEMALLOC",
                  "-DSQLITE_ENABLE_LOCKING_STYLE=0", "-DSQLITE_ENABLE_FTS5"]  # as ouro's scripts/sqlite.sh
-        progs.append(("ouro", [os.path.join(od, "ouro"), "-S", "-O1"] + flags + ["sqlite3.c", "-o", "sqlite3.s"], od, {},
+        progs.append(("ouro", [os.path.join(od, "ouro"), "-S", "-O1"] + flags + ["sqlite3.c", "-o", "sqlite3.s"], od,
+                      {"OURO_INCLUDE": os.path.join(od, "include")},
                       lambda out, od=od: hashlib.sha256(open(os.path.join(od, "sqlite3.s"), "rb").read())
                       .hexdigest()[:16]))
     ld = ensure_lua_tests(work)
-    progs.append(("lua", [LUA, "-e", "_U=true", "all.lua"], ld, {},
-                  lambda out: "final OK" if "final OK" in out else "failed: " + (out.strip().splitlines() or [""])[-1][:60]))
+    # The files the suite's driver all.lua runs, each in its own process, in "user" mode (_U: no
+    # internal C test library). Skipped: main.lua (runs the interpreter through /bin/sh, which
+    # drops DYLD_* variables), files.lua (needs /dev/full, which the sandbox here denies) and
+    # big.lua (written to run as a coroutine inside all.lua). heavy.lua is not part of all.lua
+    # (it allocates tens of GB) and is not run.
+    referenced = set(re.findall(r"([a-z0-9]+)\.lua", open(os.path.join(ld, "all.lua")).read()))
+    files = sorted(f + ".lua" for f in referenced if f not in ("all", "main", "files", "big"))
+    progs.append(("lua", [[LUA, "-e", "_U=true _port=true", f] for f in files], ld, {}, None))
     progs.append(("cpython", [PY312, "-m", "test", "-j4", "--timeout", "600"] + CPYTHON_TESTS, work,
                   {"PYTHONMALLOC": "malloc"}, None))
     return progs
@@ -147,7 +157,17 @@ def main():
         reps = 1 if heavy else args.reps
         for alloc in names:
             for rep in range(reps if alloc != "mallockit-debug" else 1):
-                r = bench.run_measured(argv, allocs[alloc], extra_env=env, cwd=cwd or args.work, timeout=1800)
+                if isinstance(argv[0], list):  # several processes, one per test file
+                    parts = [(a[-1], bench.run_measured(a, allocs[alloc], extra_env=env, cwd=cwd or args.work,
+                                                        timeout=1800)) for a in argv]
+                    bad = [f for f, p in parts if not p["ok"]]
+                    r = {"ok": not bad, "wall": sum(p.get("wall") or 0 for f, p in parts),
+                         "footprint": max(p.get("footprint") or 0 for f, p in parts),
+                         "maxrss": max(p.get("maxrss") or 0 for f, p in parts),
+                         "out": f"{len(parts) - len(bad)}/{len(parts)} files OK" + (" failing: " + " ".join(bad) if bad else "")}
+                    check = (lambda out: out)
+                else:
+                    r = bench.run_measured(argv, allocs[alloc], extra_env=env, cwd=cwd or args.work, timeout=1800)
                 out = r.get("out", "")
                 rec = {"program": name, "alloc": alloc, "rep": rep, "ok": r["ok"], "wall": r.get("wall"),
                        "footprint": r.get("footprint"), "maxrss": r.get("maxrss")}

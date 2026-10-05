@@ -27,7 +27,7 @@ def run(cmd, env=None):
 
 def counted(out):
     m = re.findall(r"(\d+) passed, (\d+) failed", out)
-    return f"{m[-1][0]} passed, {m[-1][1]} failed" if m else "no summary"
+    return " + ".join(f"{a} passed, {b} failed" for a, b in m) if m else "no summary"
 
 
 def main():
@@ -49,7 +49,7 @@ def main():
     add("malloc replacement smoke tests", "make -s test-override",
         summary=lambda o: f"{len(re.findall(r'smoke(_cxx)?: ok', o))} programs ok")
     add("ThreadSanitizer, full size", "make -s tsan", env={"MK_TEST_SCALE": "1"})
-    add("UndefinedBehaviorSanitizer", "make -s ubsan")
+    add("UndefinedBehaviorSanitizer (unit + guard)", "make -s ubsan")
     if not IS_MAC:
         add("AddressSanitizer", "make -s asan", env={"ASAN_OPTIONS": "detect_leaks=0"})
     add("trace driver, 20 more seeds", "./build/test_unit trace_random_seeds", env={"MK_TRACE_SEEDS": "20"})

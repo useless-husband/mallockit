@@ -1,0 +1,42 @@
+{
+ "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+ "date": "2026-10-05",
+ "checks": [
+  {
+   "name": "unit, trace and stress tests",
+   "command": "./build/test_unit",
+   "passed": true,
+   "result": "41 passed, 0 failed (4 s)"
+  },
+  {
+   "name": "guard mode tests",
+   "command": "./build/test_guard",
+   "passed": true,
+   "result": "12 passed, 0 failed (0 s)"
+  },
+  {
+   "name": "malloc replacement smoke tests",
+   "command": "make -s test-override",
+   "passed": true,
+   "result": "4 programs ok (0 s)"
+  },
+  {
+   "name": "ThreadSanitizer, full size",
+   "command": "MK_TEST_SCALE=1 make -s tsan",
+   "passed": true,
+   "result": "41 passed, 0 failed (28 s)"
+  },
+  {
+   "name": "UndefinedBehaviorSanitizer (unit + guard)",
+   "command": "make -s ubsan",
+   "passed": true,
+   "result": "41 passed, 0 failed + 12 passed, 0 failed (4 s)"
+  },
+  {
+   "name": "trace driver, 20 more seeds",
+   "command": "MK_TRACE_SEEDS=20 ./build/test_unit trace_random_seeds",
+   "passed": true,
+   "result": "1 passed, 0 failed (10 s)"
+  }
+ ]
+}

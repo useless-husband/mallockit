@@ -1,0 +1,228 @@
+[
+ {
+  "name": "sizeclass-rounds-down",
+  "file": "src/internal.h",
+  "original": "return 9u + (b - 7u) * 4u + (unsigned)((s >> (b - 2u)) & 3u);",
+  "mutant": "return 8u + (b - 7u) * 4u + (unsigned)((s >> (b - 2u)) & 3u);",
+  "build": "unit",
+  "filter": "",
+  "simulates": "size > 128 B gets the bin one step too small",
+  "status": "killed",
+  "failed_tests": [
+   "api_alignment_contracts"
+  ],
+  "tsan_race": false,
+  "seconds": 0.2
+ },
+ {
+  "name": "remote-free-not-atomic",
+  "file": "src/alloc.c",
+  "original": "} while (!atomic_compare_exchange_weak_explicit(&page->xthread_free, &tf, nt, memory_order_release, memory_order_relaxed));",
+  "mutant": "} while (0); *(uintptr_t *)&page->xthread_free = nt;",
+  "build": "unit",
+  "filter": "stress",
+  "simulates": "remote free pushes with a plain load/store instead of a CAS",
+  "status": "killed",
+  "failed_tests": [
+   "stress_producer_consumer",
+   "stress_remote_frees_into_full_pages"
+  ],
+  "tsan_race": false,
+  "seconds": 0.3
+ },
+ {
+  "name": "remote-free-not-atomic/tsan",
+  "file": "src/alloc.c",
+  "original": "} while (!atomic_compare_exchange_weak_explicit(&page->xthread_free, &tf, nt, memory_order_release, memory_order_relaxed));",
+  "mutant": "} while (0); *(uintptr_t *)&page->xthread_free = nt;",
+  "build": "tsan",
+  "filter": "stress_producer",
+  "simulates": "same bug, under ThreadSanitizer",
+  "status": "killed",
+  "failed_tests": [],
+  "tsan_race": true,
+  "seconds": 0.4
+ },
+ {
+  "name": "page-bitmap-off-by-one",
+  "file": "src/segment.c",
+  "original": "seg->free_mask &= ~bit;",
+  "mutant": "seg->free_mask &= ~(bit << 1);",
+  "build": "unit",
+  "filter": "",
+  "simulates": "marks the neighbouring page as taken, so one page is handed out twice",
+  "status": "killed",
+  "failed_tests": [
+   "api_alignment_contracts",
+   "api_good_size_matches_usable",
+   "api_realloc_keeps_contents",
+   "api_sizes_are_usable_and_aligned"
+  ],
+  "tsan_race": false,
+  "seconds": 0.2
+ },
+ {
+  "name": "segment-map-off-by-one",
+  "file": "src/segment.c",
+  "original": "uintptr_t chunk = (uintptr_t)seg >> MK_SEGMENT_SHIFT;",
+  "mutant": "uintptr_t chunk = ((uintptr_t)seg >> MK_SEGMENT_SHIFT) + 1;",
+  "build": "unit",
+  "filter": "",
+  "simulates": "records segments one 4 MiB slot too high in the ownership bitmap",
+  "status": "killed",
+  "failed_tests": [
+   "api_alignment_contracts",
+   "api_owns_rejects_foreign_pointers",
+   "api_sizes_are_usable_and_aligned",
+   "heap_reclaim_frees_abandoned_memory",
+   "segment_huge_alignment_layout",
+   "segment_purge_policy",
+   "stress_producer_consumer",
+   "stress_remote_frees_into_full_pages",
+   "stress_slot_exchange_cross_thread_frees",
+   "stress_thread_churn_abandon_adopt"
+  ],
+  "tsan_race": false,
+  "seconds": 4.3
+ },
+ {
+  "name": "aligned-size-not-rounded",
+  "file": "src/alloc.c",
+  "original": "size_t sz = mk_align_up(size == 0 ? 1 : size, align);",
+  "mutant": "size_t sz = size == 0 ? 1 : size;",
+  "build": "unit",
+  "filter": "",
+  "simulates": "aligned allocation forgets to round the size up to the alignment",
+  "status": "killed",
+  "failed_tests": [
+   "api_alignment_contracts",
+   "heap_reclaim_frees_abandoned_memory",
+   "segment_huge_alignment_layout",
+   "segment_purge_policy",
+   "stress_producer_consumer",
+   "stress_remote_frees_into_full_pages",
+   "stress_slot_exchange_cross_thread_frees",
+   "stress_thread_churn_abandon_adopt",
+   "trace_many_live_small_blocks",
+   "trace_random_seeds",
+   "trace_with_immediate_purge"
+  ],
+  "tsan_race": false,
+  "seconds": 0.4
+ },
+ {
+  "name": "collect-forgets-used",
+  "file": "src/page.c",
+  "original": "page->used -= count;",
+  "mutant": "(void)count;",
+  "build": "unit",
+  "filter": "",
+  "simulates": "collecting remote frees does not update the in-use count",
+  "status": "killed",
+  "failed_tests": [
+   "heap_reclaim_frees_abandoned_memory",
+   "page_collect_merges_remote_frees",
+   "segment_purge_policy",
+   "stress_producer_consumer",
+   "stress_remote_frees_into_full_pages",
+   "stress_slot_exchange_cross_thread_frees",
+   "stress_thread_churn_abandon_adopt"
+  ],
+  "tsan_race": false,
+  "seconds": 4.3
+ },
+ {
+  "name": "delayed-free-tag-ignored",
+  "file": "src/alloc.c",
+  "original": "if ((tf & MK_TAG_MASK) == MK_DELAYED_USE) {",
+  "mutant": "if (0) {",
+  "build": "unit",
+  "filter": "",
+  "simulates": "remote frees into a full page never notify the owner heap",
+  "status": "killed",
+  "failed_tests": [
+   "page_full_list_and_delayed_free",
+   "segment_purge_policy",
+   "stress_producer_consumer",
+   "stress_remote_frees_into_full_pages",
+   "stress_slot_exchange_cross_thread_frees",
+   "stress_thread_churn_abandon_adopt"
+  ],
+  "tsan_race": false,
+  "seconds": 4.4
+ },
+ {
+  "name": "realloc-copies-half",
+  "file": "src/alloc.c",
+  "original": "memcpy(q, p, usable < size ? usable : size);",
+  "mutant": "memcpy(q, p, (usable < size ? usable : size) / 2);",
+  "build": "unit",
+  "filter": "",
+  "simulates": "realloc copies only half of the old contents",
+  "status": "killed",
+  "failed_tests": [
+   "api_realloc_keeps_contents",
+   "heap_reclaim_frees_abandoned_memory",
+   "segment_purge_policy",
+   "stress_producer_consumer",
+   "stress_remote_frees_into_full_pages",
+   "stress_slot_exchange_cross_thread_frees",
+   "stress_thread_churn_abandon_adopt",
+   "trace_many_live_small_blocks",
+   "trace_random_seeds",
+   "trace_with_immediate_purge"
+  ],
+  "tsan_race": false,
+  "seconds": 0.5
+ },
+ {
+  "name": "thread-exit-keeps-owner",
+  "file": "src/heap.c",
+  "original": "mk_heap_set_owner(h, 0);",
+  "mutant": "(void)0;",
+  "build": "unit",
+  "filter": "heap_",
+  "simulates": "an exited thread's segments keep its thread id",
+  "status": "killed",
+  "failed_tests": [
+   "heap_abandoned_then_adopted",
+   "heap_reclaim_frees_abandoned_memory"
+  ],
+  "tsan_race": false,
+  "seconds": 0.2
+ },
+ {
+  "name": "guard-canary-unchecked",
+  "file": "src/debug.c",
+  "original": "if (c[i] != MK_CANARY) {",
+  "mutant": "if (0) {",
+  "build": "guard",
+  "filter": "",
+  "simulates": "guard mode stops checking canaries",
+  "status": "killed",
+  "failed_tests": [
+   "guard_detects_overrun_by_one_byte",
+   "guard_detects_overrun_of_aligned_block",
+   "guard_detects_overrun_through_realloc"
+  ],
+  "tsan_race": false,
+  "seconds": 0.3
+ },
+ {
+  "name": "guard-double-free-unchecked",
+  "file": "src/debug.c",
+  "original": "if ((old & bit) == 0) {",
+  "mutant": "if (0) {",
+  "build": "guard",
+  "filter": "",
+  "simulates": "guard mode stops checking the allocation bitmap",
+  "status": "killed",
+  "failed_tests": [
+   "guard_default_handler_aborts_with_message",
+   "guard_detects_cross_thread_double_free",
+   "guard_detects_double_free"
+  ],
+  "tsan_race": false,
+  "seconds": 0.3
+ }
+]
