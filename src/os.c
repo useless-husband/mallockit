@@ -63,12 +63,19 @@ static void mk_munmap(void *p, size_t size) {
  * multiples of the OS page size; align is a power of two and offset <
  * align. Tries a plain mapping first (often already aligned), otherwise
  * maps size+align bytes and trims both ends. */
+/* Where the next aligned mapping will probably fit: just after the last
+ * one. Asking for it first usually gives an aligned mapping in one system
+ * call instead of three (map, unmap, map larger and trim). */
+static _Atomic(uintptr_t) mk_aligned_hint;
+
 void *mk_os_alloc_aligned_at(size_t size, size_t align, size_t offset) {
   if (size == 0 || size > ((size_t)1 << MK_VA_BITS) || align > ((size_t)1 << MK_VA_BITS)) {
     errno = ENOMEM;
     return NULL;
   }
-  void *p = mk_mmap(NULL, size);
+  uintptr_t hint = atomic_load_explicit(&mk_aligned_hint, memory_order_relaxed);
+  if (hint != 0) hint = mk_align_up(hint + offset, align) - offset;
+  void *p = mk_mmap((void *)hint, size);
   if (p == NULL) return NULL;
   if ((((uintptr_t)p + offset) & (align - 1)) != 0) {
     mk_munmap(p, size);
@@ -82,6 +89,7 @@ void *mk_os_alloc_aligned_at(size_t size, size_t align, size_t offset) {
     mk_munmap(aligned + size, post);
     p = aligned;
   }
+  atomic_store_explicit(&mk_aligned_hint, (uintptr_t)p + size, memory_order_relaxed);
   mk_stat_mapped((ptrdiff_t)size);
   return p;
 }

@@ -15,18 +15,20 @@
 
 #include <errno.h>
 
-#define MK_CACHE_MAX 16
+/* Empty segments kept for reuse. Purged ones cost one resident OS page
+ * each (the header), so the bound is mostly about address space. */
+#ifndef MK_CACHE_MAX
+#define MK_CACHE_MAX 64
+#endif
+/* ...but at most this many dirty (not yet purged) bytes: beyond it the
+ * oldest dirty segment is purged at once instead of after the delay. */
+#ifndef MK_CACHE_DIRTY_MAX
+#define MK_CACHE_DIRTY_MAX ((size_t)8 << 20)
+#endif
 
 /* ------------------------------------------------------- segment map */
 
-#define MK_MAP_CHUNKS ((size_t)1 << (MK_VA_BITS - MK_SEGMENT_SHIFT))
-static _Atomic(uint64_t) mk_segmap[MK_MAP_CHUNKS / 64];
-
-bool mk_segmap_test(uintptr_t chunk) {
-  if (chunk >= MK_MAP_CHUNKS) return false;
-  uint64_t w = atomic_load_explicit(&mk_segmap[chunk / 64], memory_order_relaxed);
-  return (w >> (chunk % 64)) & 1;
-}
+_Atomic(uint64_t) mk_segmap[MK_MAP_CHUNKS / 64];
 
 static void mk_segmap_set(mk_segment_t *seg, bool on) {
   uintptr_t chunk = (uintptr_t)seg >> MK_SEGMENT_SHIFT;
@@ -105,8 +107,16 @@ static uint8_t *mk_page_area(mk_segment_t *seg, unsigned idx, size_t *size) {
 static mk_lock_t mk_cache_lock = MK_LOCK_INIT;
 static mk_segment_t *mk_cache_first, *mk_cache_last;
 static _Atomic(size_t) mk_cache_count; /* written under the lock, peeked without */
+static size_t mk_cache_dirty;          /* dirty bytes of cached segments (under the lock) */
+
+static size_t mk_cached_dirty_bytes(const mk_segment_t *s) {
+  if (s->purged_all) return 0;
+  size_t to = s->dirty_extent > s->size ? s->size : s->dirty_extent;
+  return to > mk_os_page_size ? to - mk_os_page_size : 0;
+}
 
 static void mk_cache_unlink(mk_segment_t *s) {
+  mk_cache_dirty -= mk_cached_dirty_bytes(s);
   if (s->prev) s->prev->next = s->next; else mk_cache_first = s->next;
   if (s->next) s->next->prev = s->prev; else mk_cache_last = s->prev;
   s->next = s->prev = NULL;
@@ -116,6 +126,7 @@ static void mk_cache_unlink(mk_segment_t *s) {
 
 static void mk_segment_purge_cached(mk_segment_t *s) {
   if (s->purged_all) return;
+  mk_cache_dirty -= mk_cached_dirty_bytes(s);
   /* the first OS page keeps the header fields the cache needs */
   size_t from = mk_os_page_size;
   size_t to = s->dirty_extent > s->size ? s->size : s->dirty_extent;
@@ -163,7 +174,11 @@ void mk_segment_release(mk_segment_t *seg) {
   mk_cache_first = seg;
   atomic_fetch_add_explicit(&mk_cache_count, 1, memory_order_relaxed);
   mk_stat_add(cached, 1);
+  mk_cache_dirty += mk_cached_dirty_bytes(seg);
   if (mk_options.purge_delay_ms == 0) mk_segment_purge_cached(seg);
+  /* bound the dirty bytes: purge the oldest dirty segments first */
+  for (mk_segment_t *s = mk_cache_last; s != NULL && mk_cache_dirty > MK_CACHE_DIRTY_MAX; s = s->prev)
+    if (mk_options.purge_delay_ms >= 0) mk_segment_purge_cached(s);
   mk_unlock(&mk_cache_lock);
   if (evict) mk_segment_unmap(evict);
 }
@@ -175,6 +190,7 @@ void mk_segment_cache_flush(bool all) {
     list = mk_cache_first;
     for (mk_segment_t *s = list; s; s = s->next) mk_stat_sub(cached, 1);
     mk_cache_first = mk_cache_last = NULL;
+    mk_cache_dirty = 0;
     atomic_store_explicit(&mk_cache_count, 0, memory_order_relaxed);
   } else {
     mk_cache_purge_expired(mk_clock_ms(), true);

@@ -258,7 +258,15 @@ static inline mk_heap_t *mk_heap_get(void) { return mk_tls_heap; }
 
 /* ----------------------------------------------- segment map and lookup */
 
-mk_internal bool mk_segmap_test(uintptr_t chunk);
+/* One bit per 4 MiB of address space: does a mallockit segment start
+ * there? 8 MiB of zero-initialised (untouched, so not resident) memory. */
+#define MK_MAP_CHUNKS ((size_t)1 << (MK_VA_BITS - MK_SEGMENT_SHIFT))
+extern mk_internal _Atomic(uint64_t) mk_segmap[MK_MAP_CHUNKS / 64];
+static inline bool mk_segmap_test(uintptr_t chunk) {
+  if (chunk >= MK_MAP_CHUNKS) return false;
+  uint64_t w = atomic_load_explicit(&mk_segmap[chunk / 64], memory_order_relaxed);
+  return (w >> (chunk % 64)) & 1;
+}
 
 /* The segment containing p. Blocks never start at a segment boundary
  * (the header lives there) except for objects with an alignment of at

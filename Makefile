@@ -35,14 +35,16 @@ TESTFLAGS := $(CFLAGS_BASE) -Itests
 LDLIBS  := -lpthread
 
 LIB_SRC := src/os.c src/segment.c src/page.c src/heap.c src/alloc.c src/debug.c src/override.c
-LIB_HDR := src/internal.h include/mallockit.h
+LIB_HDR := src/internal.h include/mallockit.h $(LIB_SRC)
+UNITY   := src/mallockit.c
 
 # Variants: rel = API only (static, used by tests and benchmarks),
 # ovr = replaces malloc (shared library), dbg/dbgovr = guard mode.
-OBJ_rel    := $(patsubst src/%.c,build/obj/rel/%.o,$(LIB_SRC))
-OBJ_ovr    := $(patsubst src/%.c,build/obj/ovr/%.o,$(LIB_SRC))
-OBJ_dbg    := $(patsubst src/%.c,build/obj/dbg/%.o,$(LIB_SRC))
-OBJ_dbgovr := $(patsubst src/%.c,build/obj/dbgovr/%.o,$(LIB_SRC))
+# Each variant is one object compiled from the unity file.
+OBJ_rel    := build/obj/rel/mallockit.o
+OBJ_ovr    := build/obj/ovr/mallockit.o
+OBJ_dbg    := build/obj/dbg/mallockit.o
+OBJ_dbgovr := build/obj/dbgovr/mallockit.o
 
 UNIT_SRC := $(wildcard tests/t_*.c) tests/test_main.c
 GUARD_SRC := tests/guard/t_guard.c tests/test_main.c
@@ -118,12 +120,12 @@ test-override: build/libmallockit.$(SHLIB) build/libmallockit-debug.$(SHLIB) bui
 SANFLAGS_tsan  := -fsanitize=thread
 SANFLAGS_ubsan := -fsanitize=undefined -fno-sanitize-recover=all
 SANFLAGS_asan  := -fsanitize=address -fno-omit-frame-pointer
-build/san/%/test_unit: $(LIB_SRC) $(LIB_HDR) $(UNIT_SRC) tests/test.h
+build/san/%/test_unit: $(LIB_HDR) $(UNIT_SRC) tests/test.h
 	@mkdir -p $(dir $@)
-	$(SAN_CC) $(SAN_SYSROOT) $(CFLAGS_BASE) $(NOBUILTIN) -Itests -O1 $(SANFLAGS_$*) $(LIB_SRC) $(UNIT_SRC) $(LDLIBS) -o $@
-build/san/%/test_guard: $(LIB_SRC) $(LIB_HDR) $(GUARD_SRC) tests/test.h
+	$(SAN_CC) $(SAN_SYSROOT) $(CFLAGS_BASE) $(NOBUILTIN) -Itests -O1 $(SANFLAGS_$*) $(UNITY) $(UNIT_SRC) $(LDLIBS) -o $@
+build/san/%/test_guard: $(LIB_HDR) $(GUARD_SRC) tests/test.h
 	@mkdir -p $(dir $@)
-	$(SAN_CC) $(SAN_SYSROOT) $(CFLAGS_BASE) $(NOBUILTIN) -Itests -O1 -DMK_DEBUG=1 $(SANFLAGS_$*) $(LIB_SRC) $(GUARD_SRC) $(LDLIBS) -o $@
+	$(SAN_CC) $(SAN_SYSROOT) $(CFLAGS_BASE) $(NOBUILTIN) -Itests -O1 -DMK_DEBUG=1 $(SANFLAGS_$*) $(UNITY) $(GUARD_SRC) $(LDLIBS) -o $@
 
 tsan: build/san/tsan/test_unit
 	TSAN_OPTIONS="halt_on_error=1" MK_TEST_SCALE=$${MK_TEST_SCALE:-4} ./build/san/tsan/test_unit
