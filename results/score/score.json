@@ -1,0 +1,458 @@
+{
+ "machine": {
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.0",
+  "cpu": "Apple M5",
+  "ncpu": "10",
+  "pcores": "4",
+  "ecores": "6",
+  "mem": "17179869184",
+  "pagesize": "16384"
+ },
+ "w": 0.5,
+ "t_cap": 4.0,
+ "rows": [
+  {
+   "trace": "binary",
+   "alloc": "system",
+   "util": 0.6625,
+   "peak_payload": 57600000,
+   "mem_growth": 86941768.0,
+   "ops": 600000,
+   "ops_per_sec": 101997620.1,
+   "ops_per_sec_all": [
+    101754432.6,
+    101997620.1,
+    102489307.6
+   ],
+   "t_rel": 1.0
+  },
+  {
+   "trace": "binary",
+   "alloc": "mallockit",
+   "util": 0.9972,
+   "peak_payload": 57600000,
+   "mem_growth": 57761828.0,
+   "ops": 600000,
+   "ops_per_sec": 190432109.0,
+   "ops_per_sec_all": [
+    190432109.0,
+    188654890.6,
+    191296665.9
+   ],
+   "t_rel": 1.8670250228710974
+  },
+  {
+   "trace": "binary",
+   "alloc": "mimalloc",
+   "util": 0.9914,
+   "peak_payload": 57600000,
+   "mem_growth": 58097712.0,
+   "ops": 600000,
+   "ops_per_sec": 197826572.0,
+   "ops_per_sec_all": [
+    196798218.9,
+    200404778.0,
+    197826572.0
+   ],
+   "t_rel": 1.9395214496774325
+  },
+  {
+   "trace": "binary",
+   "alloc": "jemalloc",
+   "util": 0.9763,
+   "peak_payload": 57600000,
+   "mem_growth": 58998832.0,
+   "ops": 600000,
+   "ops_per_sec": 88660633.4,
+   "ops_per_sec_all": [
+    88660633.4,
+    87220539.1,
+    88738726.9
+   ],
+   "t_rel": 0.8692421775437092
+  },
+  {
+   "trace": "coalesce",
+   "alloc": "system",
+   "util": 0.2215,
+   "peak_payload": 32768000,
+   "mem_growth": 147947664.0,
+   "ops": 93000,
+   "ops_per_sec": 75426041.5,
+   "ops_per_sec_all": [
+    75949240.5,
+    75426041.5,
+    75055546.9
+   ],
+   "t_rel": 1.0
+  },
+  {
+   "trace": "coalesce",
+   "alloc": "mallockit",
+   "util": 0.6651,
+   "peak_payload": 32768000,
+   "mem_growth": 49266712.0,
+   "ops": 93000,
+   "ops_per_sec": 170499431.7,
+   "ops_per_sec_all": [
+    170499431.7,
+    172333575.5,
+    166486428.9
+   ],
+   "t_rel": 2.260484950678473
+  },
+  {
+   "trace": "coalesce",
+   "alloc": "mimalloc",
+   "util": 0.5127,
+   "peak_payload": 32768000,
+   "mem_growth": 63914008.0,
+   "ops": 93000,
+   "ops_per_sec": 114368651.2,
+   "ops_per_sec_all": [
+    114980105.2,
+    114368651.2,
+    114099047.4
+   ],
+   "t_rel": 1.516301915433279
+  },
+  {
+   "trace": "coalesce",
+   "alloc": "jemalloc",
+   "util": 0.26805,
+   "peak_payload": 32768000,
+   "mem_growth": 122249312.0,
+   "ops": 93000,
+   "ops_per_sec": 27117565.8,
+   "ops_per_sec_all": [
+    27117565.8,
+    26909632.7,
+    27378636.9
+   ],
+   "t_rel": 0.35952524168990097
+  },
+  {
+   "trace": "random",
+   "alloc": "system",
+   "util": 0.8345,
+   "peak_payload": 41414801,
+   "mem_growth": 49627208.0,
+   "ops": 419990,
+   "ops_per_sec": 58539076.8,
+   "ops_per_sec_all": [
+    58539076.8,
+    58467866.8,
+    58955009.0
+   ],
+   "t_rel": 1.0
+  },
+  {
+   "trace": "random",
+   "alloc": "mallockit",
+   "util": 0.8689,
+   "peak_payload": 41414801,
+   "mem_growth": 47661080.0,
+   "ops": 419990,
+   "ops_per_sec": 98932649.9,
+   "ops_per_sec_all": [
+    98985523.6,
+    98932649.9,
+    95807923.4
+   ],
+   "t_rel": 1.6900275048410058
+  },
+  {
+   "trace": "random",
+   "alloc": "mimalloc",
+   "util": 0.8621,
+   "peak_payload": 41414801,
+   "mem_growth": 48037912.0,
+   "ops": 419990,
+   "ops_per_sec": 88008974.1,
+   "ops_per_sec_all": [
+    88008974.1,
+    87808906.5,
+    89019241.6
+   ],
+   "t_rel": 1.503422652200077
+  },
+  {
+   "trace": "random",
+   "alloc": "jemalloc",
+   "util": 0.8762,
+   "peak_payload": 41414801,
+   "mem_growth": 47267864.0,
+   "ops": 419990,
+   "ops_per_sec": 76512820.3,
+   "ops_per_sec_all": [
+    72309454.8,
+    76512820.3,
+    77157947.9
+   ],
+   "t_rel": 1.3070383832906638
+  },
+  {
+   "trace": "realloc",
+   "alloc": "system",
+   "util": 0.43320000000000003,
+   "peak_payload": 32512432,
+   "mem_growth": 75055200.0,
+   "ops": 25081,
+   "ops_per_sec": 3873208.1,
+   "ops_per_sec_all": [
+    3873793.6,
+    3788309.9,
+    3873208.1
+   ],
+   "t_rel": 1.0
+  },
+  {
+   "trace": "realloc",
+   "alloc": "mallockit",
+   "util": 0.5106,
+   "peak_payload": 32512432,
+   "mem_growth": 63668824.0,
+   "ops": 25081,
+   "ops_per_sec": 10318693.8,
+   "ops_per_sec_all": [
+    10358664.5,
+    10190678.6,
+    10318693.8
+   ],
+   "t_rel": 2.6641206807349187
+  },
+  {
+   "trace": "realloc",
+   "alloc": "mimalloc",
+   "util": 0.83295,
+   "peak_payload": 32512432,
+   "mem_growth": 39034904.0,
+   "ops": 25081,
+   "ops_per_sec": 4006269.5,
+   "ops_per_sec_all": [
+    4006269.5,
+    3860043.2,
+    4053515.0
+   ],
+   "t_rel": 1.034354312126942
+  },
+  {
+   "trace": "realloc",
+   "alloc": "jemalloc",
+   "util": 0.7736000000000001,
+   "peak_payload": 32512432,
+   "mem_growth": 42024996.0,
+   "ops": 25081,
+   "ops_per_sec": 2678882.8,
+   "ops_per_sec_all": [
+    2689380.5,
+    2678882.8,
+    2657079.1
+   ],
+   "t_rel": 0.6916444277806812
+  },
+  {
+   "trace": "strings",
+   "alloc": "system",
+   "util": 0.8322499999999999,
+   "peak_payload": 12810626,
+   "mem_growth": 15392768.0,
+   "ops": 4000000,
+   "ops_per_sec": 118545447.4,
+   "ops_per_sec_all": [
+    118545447.4,
+    116616942.5,
+    119281922.8
+   ],
+   "t_rel": 1.0
+  },
+  {
+   "trace": "strings",
+   "alloc": "mallockit",
+   "util": 0.8444,
+   "peak_payload": 12810626,
+   "mem_growth": 15171584.0,
+   "ops": 4000000,
+   "ops_per_sec": 432944448.6,
+   "ops_per_sec_all": [
+    434367698.8,
+    432944448.6,
+    429089679.7
+   ],
+   "t_rel": 3.652138973664205
+  },
+  {
+   "trace": "strings",
+   "alloc": "mimalloc",
+   "util": 0.8453,
+   "peak_payload": 12810626,
+   "mem_growth": 15155200.0,
+   "ops": 4000000,
+   "ops_per_sec": 410855872.4,
+   "ops_per_sec_all": [
+    415885527.5,
+    364668802.6,
+    410855872.4
+   ],
+   "t_rel": 3.465808948475907
+  },
+  {
+   "trace": "strings",
+   "alloc": "jemalloc",
+   "util": 0.8274,
+   "peak_payload": 12810626,
+   "mem_growth": 15482880.0,
+   "ops": 4000000,
+   "ops_per_sec": 119787576.7,
+   "ops_per_sec_all": [
+    119787576.7,
+    118623962.0,
+    124028700.2
+   ],
+   "t_rel": 1.0104780852174673
+  },
+  {
+   "trace": "phases",
+   "alloc": "system",
+   "util": 0.53115,
+   "peak_payload": 62925963,
+   "mem_growth": 118464632.0,
+   "ops": 95264,
+   "ops_per_sec": 65831803.4,
+   "ops_per_sec_all": [
+    66214738.7,
+    65831803.4,
+    64795336.4
+   ],
+   "t_rel": 1.0
+  },
+  {
+   "trace": "phases",
+   "alloc": "mallockit",
+   "util": 0.56325,
+   "peak_payload": 62925963,
+   "mem_growth": 111714388.0,
+   "ops": 95264,
+   "ops_per_sec": 173478865.0,
+   "ops_per_sec_all": [
+    175354303.6,
+    169821802.2,
+    173478865.0
+   ],
+   "t_rel": 2.6351832403242352
+  },
+  {
+   "trace": "phases",
+   "alloc": "mimalloc",
+   "util": 0.643,
+   "peak_payload": 62925963,
+   "mem_growth": 97861704.0,
+   "ops": 95264,
+   "ops_per_sec": 133180927.0,
+   "ops_per_sec_all": [
+    131421826.9,
+    133791073.6,
+    133180927.0
+   ],
+   "t_rel": 2.023048437406167
+  },
+  {
+   "trace": "phases",
+   "alloc": "jemalloc",
+   "util": 0.8746,
+   "peak_payload": 62925963,
+   "mem_growth": 71950396.0,
+   "ops": 95264,
+   "ops_per_sec": 48841135.2,
+   "ops_per_sec_all": [
+    48621962.1,
+    48841135.2,
+    49363520.4
+   ],
+   "t_rel": 0.741907902829835
+  },
+  {
+   "trace": "trees",
+   "alloc": "system",
+   "util": 0.74585,
+   "peak_payload": 48000000,
+   "mem_growth": 64356388.0,
+   "ops": 3000000,
+   "ops_per_sec": 77748658.0,
+   "ops_per_sec_all": [
+    77796290.4,
+    77748658.0,
+    76430686.9
+   ],
+   "t_rel": 1.0
+  },
+  {
+   "trace": "trees",
+   "alloc": "mallockit",
+   "util": 0.7483,
+   "peak_payload": 48000000,
+   "mem_growth": 64143408.0,
+   "ops": 3000000,
+   "ops_per_sec": 249422172.0,
+   "ops_per_sec_all": [
+    251716837.9,
+    237622978.1,
+    249422172.0
+   ],
+   "t_rel": 3.2080575847367037
+  },
+  {
+   "trace": "trees",
+   "alloc": "mimalloc",
+   "util": 0.7472,
+   "peak_payload": 48000000,
+   "mem_growth": 64241712.0,
+   "ops": 3000000,
+   "ops_per_sec": 255622884.2,
+   "ops_per_sec_all": [
+    255841719.2,
+    253152232.1,
+    255622884.2
+   ],
+   "t_rel": 3.2878108867165268
+  },
+  {
+   "trace": "trees",
+   "alloc": "jemalloc",
+   "util": 0.7406,
+   "peak_payload": 48000000,
+   "mem_growth": 64815152.0,
+   "ops": 3000000,
+   "ops_per_sec": 86141163.0,
+   "ops_per_sec_all": [
+    85276532.8,
+    86141163.0,
+    86910897.0
+   ],
+   "t_rel": 1.1079440496580661
+  }
+ ],
+ "scores": {
+  "system": {
+   "score": 0.7490063365929801,
+   "util_geomean": 0.5610104922564366,
+   "t_rel_geomean": 1.0
+  },
+  "mallockit": {
+   "score": 1.3419800183157171,
+   "util_geomean": 0.7244466824507136,
+   "t_rel_geomean": 2.4859115421253577
+  },
+  "mimalloc": {
+   "score": 1.2169655404451212,
+   "util_geomean": 0.7613142006449956,
+   "t_rel_geomean": 1.945327074388155
+  },
+  "jemalloc": {
+   "score": 0.7621371240790927,
+   "util_geomean": 0.714502791242597,
+   "t_rel_geomean": 0.8129471333336358
+  }
+ }
+}
