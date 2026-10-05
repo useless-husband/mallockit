@@ -129,6 +129,12 @@ TEST(guard_detects_invalid_free) {
   mk_free(&on_stack); /* not ours at all */
   CHECK(atomic_load(&last_err) == MK_ERR_INVALID_FREE);
   reset();
+  /* a wild pointer: the 4 MiB-aligned address below it is not mapped, so
+   * guard mode must check ownership before reading any "segment header"
+   * (regression: it used to read the header first and could crash) */
+  mk_free((void *)(uintptr_t)0x6f0000000040ull);
+  CHECK(atomic_load(&last_err) == MK_ERR_INVALID_FREE);
+  reset();
   char *big = mk_malloc(200000);
   mk_free(big + 4096);
   CHECK(atomic_load(&last_err) == MK_ERR_INVALID_FREE);

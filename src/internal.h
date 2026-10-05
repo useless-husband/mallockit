@@ -352,7 +352,7 @@ mk_internal void mk_error(int err, const void *p, const char *msg);
 #if MK_DEBUG
 mk_internal size_t mk_debug_padding(void);
 mk_internal void *mk_debug_on_alloc(void *block, size_t block_usable, size_t size);
-mk_internal bool mk_debug_on_free(mk_segment_t *seg, mk_page_t *page, void *p);
+mk_internal bool mk_debug_on_free(void *p);
 mk_internal size_t mk_debug_size(const void *p, size_t block_usable);
 mk_internal void mk_debug_page_init(mk_segment_t *seg, mk_page_t *page);
 mk_internal void mk_debug_check_next(mk_page_t *page, mk_block_t *b);

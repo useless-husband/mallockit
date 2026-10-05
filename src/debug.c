@@ -110,8 +110,14 @@ void *mk_debug_on_alloc(void *block, size_t usable, size_t n) {
   return block;
 }
 
-bool mk_debug_on_free(mk_segment_t *seg, mk_page_t *page, void *p) {
-  if (!mk_owns(p) || page->in_use == 0 || (uint8_t *)p < page->start) {
+bool mk_debug_on_free(void *p) {
+  if (!mk_owns(p)) {
+    mk_error(MK_ERR_INVALID_FREE, p, NULL);
+    return false;
+  }
+  mk_segment_t *seg = mk_segment_of(p);
+  mk_page_t *page = mk_page_of(seg, p);
+  if (page->in_use == 0 || (uint8_t *)p < page->start) {
     mk_error(MK_ERR_INVALID_FREE, p, NULL);
     return false;
   }

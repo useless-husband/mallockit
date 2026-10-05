@@ -145,7 +145,7 @@ def line_chart(title, ylabel, xs, series, pcores=4):
 def bar_chart(title, groups, values, unit="MiB"):
     """groups: list of names; values: (group, alloc) -> value."""
     W, L, R, T = 470, 110, 50, 26
-    bh, gap = 7, 10
+    bh, gap = 9, 12
     H = T + len(groups) * (len(ALLOCS) * bh + gap) + 20
     vmax = max([v for v in values.values() if v] or [1])
     sx = lambda v: L + v / vmax * (W - L - R)  # noqa: E731
@@ -159,6 +159,7 @@ def bar_chart(title, groups, values, unit="MiB"):
             if v:
                 out.append(f'<rect class="bar {SERIES[a]}" x="{L}" y="{y}" width="{max(sx(v) - L, 2):.1f}" '
                            f'height="{bh}" rx="2"><title>{esc(f"{g}, {LABEL[a]}: {v:.0f} {unit}")}</title></rect>')
+                out.append(f'<text x="{max(sx(v), L + 2) + 4:.1f}" y="{y + bh - 0.5}" style="font-size:9px">{v:.0f}</text>')
             y += bh
         y += gap
     out.append(f'<line class="axis" x1="{L}" x2="{L}" y1="{T - 4}" y2="{y - gap + 4}"/>')
@@ -187,17 +188,17 @@ def section_bench(rows, heads):
     out = []
     # ----- single-thread + 4-thread summary table
     out.append("<h2>1. Workloads against other allocators</h2>")
-    out.append("<p>Median of the repetitions; the range in brackets is min – max. Time: lower is better; "
+    out.append("<p>Median of the repetitions; ±x% is half the min – max range relative to the median. Time: lower is better; "
                "throughput (/s): higher is better. Memory is the peak physical footprint in MiB "
                "(see method). The best value in each row is bold. "
                "<span class='muted'>The machine was shared with other work during the runs; the load "
                "average is in the raw data.</span></p>")
     cases = sorted({(b, t) for (b, t, a) in d}, key=lambda x: (x[1] != 1, x[0], x[1]))
-    cases = [c for c in cases if c[1] in (1, 4)]
+    cases = [c for c in cases if c[1] in (1, 4) and c[0] != "cache-scratch1"]  # = cache-scratch, 1 thread
     out.append(legend())
     out.append("<table><tr><th>workload</th><th class=num>threads</th>" + "".join(
-        f"<th class=num>{esc(a)}</th>" for a in ALLOCS) + "".join(
-        f"<th class=num>mem {esc(a)}</th>" for a in ALLOCS) + "</tr>")
+        f"<th class=num>{esc(a)}</th>" for a in ALLOCS) +
+        "<th class=num>peak MiB: " + " / ".join(a[:2] if a != "mallockit" else "mk" for a in ALLOCS) + "</th></tr>")
     for b, t in cases:
         m = metric[b]
         meds = {a: med(d.get((b, t, a), [])) for a in ALLOCS}
@@ -207,14 +208,14 @@ def section_bench(rows, heads):
         for a in ALLOCS:
             v = meds[a]
             lo, hi = spread(d.get((b, t, a), []))
-            rng = f" <span class=muted>[{fmt(lo, m)} – {fmt(hi, m)}]</span>" if lo is not None and lo != hi else ""
+            rng = f" <span class=muted>±{(hi - lo) / 2 / v * 100:.0f}%</span>" if v and lo is not None else ""
             cls = "num best" if v is not None and v == best else "num"
             cells.append(f"<td class='{cls}'>{fmt(v, m)}{rng}</td>")
         mems = {a: med(mem.get((b, t, a), [])) for a in ALLOCS}
         mv = [v for v in mems.values() if v]
         mbest = min(mv) if mv else None
-        cells += [f"<td class='num{' best' if mems[a] and mems[a] == mbest else ''}'>{mib(mems[a])}</td>"
-                  for a in ALLOCS]
+        cells.append("<td class=num>" + " / ".join(
+            (f"<b>{mib(mems[a])}</b>" if mems[a] and mems[a] == mbest else mib(mems[a])) for a in ALLOCS) + "</td>")
         out.append(f"<tr><td>{esc(b)}</td><td class=num>{t}</td>{''.join(cells)}</tr>")
     out.append("</table>")
     # ----- scaling charts
@@ -222,8 +223,9 @@ def section_bench(rows, heads):
     scal = [b for b in scal if len({t for (bb, t, a) in d if bb == b}) > 1]
     if scal:
         out.append("<h2>2. Scaling with threads (4 performance + 6 efficiency cores)</h2>")
-        out.append("<p>Throughput for every thread count; for time-based workloads the chart shows "
-                   "work per second (1 / time). The dashed line marks 4 threads: up to there macOS can "
+        out.append("<p>Median for every thread count (throughput, or run time for the timed workloads; "
+                   "in mstress every thread does a fixed amount of work, so its time grows with the "
+                   "thread count). The dashed line marks 4 threads: up to there macOS can "
                    "keep every thread on a performance core; beyond it threads also run on the "
                    "efficiency cores, which are slower, so curves flatten or bend there for every "
                    "allocator. Hover a point for the median and range.</p>")
@@ -239,13 +241,9 @@ def section_bench(rows, heads):
                     v = d.get((b, t, a), [])
                     if not v:
                         continue
-                    if m == "time":
-                        vals = [1 / x for x in v]
-                    else:
-                        vals = v
-                    pts.append((t, med(vals), min(vals), max(vals)))
+                    pts.append((t, med(v), min(v), max(v)))
                 series[a] = pts
-            ylabel = "runs per second" if m == "time" else "operations per second"
+            ylabel = "seconds (lower is better)" if m == "time" else "operations/s (higher is better)"
             out.append(line_chart(b, ylabel, xs, series))
         out.append("</div>")
         out.append("<details><summary>Table of the scaling numbers</summary><table><tr><th>workload</th>"

@@ -192,10 +192,11 @@ void mk_free(void *p) {
   } else {
     seg = (mk_segment_t *)(a & ~(uintptr_t)MK_SEGMENT_MASK);
   }
-  mk_page_t *page = mk_page_of(seg, p);
 #if MK_DEBUG
-  if (!mk_debug_on_free(seg, page, p)) return;
+  /* validate before touching the would-be segment header at all */
+  if (!mk_debug_on_free(p)) return;
 #endif
+  mk_page_t *page = mk_page_of(seg, p);
   if (mk_likely(atomic_load_explicit(&seg->thread_id, memory_order_relaxed) == mk_thread_id())) {
     mk_push_owned(page, (mk_block_t *)p);
     if (mk_unlikely(--page->used == 0 || page->flags != 0)) mk_free_local_slow(seg->heap, page);

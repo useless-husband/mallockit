@@ -39,7 +39,7 @@ SQLITE = "/opt/homebrew/opt/sqlite/bin/sqlite3"
 LUA = "/opt/homebrew/opt/lua/bin/lua"
 DUCKDB_VERSION = "1.5.6"
 LUA_TESTS = "https://www.lua.org/tests/lua-5.5.0-tests.tar.gz"
-CPYTHON_TESTS = ("test_dict test_list test_set test_tuple test_deque test_json test_re test_unicode test_str "
+CPYTHON_TESTS = ("test_dict test_list test_set test_tuple test_deque test_json test_re test_unicode test_userstring "
                  "test_bytes test_collections test_itertools test_functools test_sort test_heapq test_bisect "
                  "test_array test_struct test_pickle test_threading test_queue test_sqlite3 test_zlib "
                  "test_decimal test_fractions test_statistics test_math test_float test_long test_weakref "
@@ -104,7 +104,7 @@ def programs(work, ext):
                       .hexdigest()[:16]))
     ld = ensure_lua_tests(work)
     progs.append(("lua", [LUA, "-e", "_U=true", "all.lua"], ld, {},
-                  lambda out: "final OK" if "final OK" in out else None))
+                  lambda out: "final OK" if "final OK" in out else "failed: " + (out.strip().splitlines() or [""])[-1][:60]))
     progs.append(("cpython", [PY312, "-m", "test", "-j4", "--timeout", "600"] + CPYTHON_TESTS, work,
                   {"PYTHONMALLOC": "malloc"}, None))
     return progs
@@ -154,7 +154,7 @@ def main():
                 if name == "cpython":
                     rec["cpython"] = summarize_cpython(out)
                     rec["answer"] = rec["cpython"]["result"]
-                elif check and r["ok"]:
+                elif check:
                     try:
                         rec["answer"] = check(out)
                     except Exception as e:  # noqa: BLE001
